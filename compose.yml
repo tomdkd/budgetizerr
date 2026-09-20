@@ -49,13 +49,13 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args:
-        APP_URL: http://backend:3001
     container_name: budgetizerr_frontend
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:3001
     ports:
       - "3012:3000"
     networks:

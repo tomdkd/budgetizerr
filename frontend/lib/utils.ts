@@ -5,4 +5,5 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// Relative path so the browser always calls the same origin; Next.js rewrites proxy it to the backend
+export const API_URL = '/api';

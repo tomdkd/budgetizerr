@@ -10,10 +10,6 @@ RUN npm ci
 COPY frontend frontend
 COPY backend backend
 
-# NEXT_PUBLIC_* vars must be present at build time to be inlined in the client bundle
-ARG APP_URL=http://localhost:4000
-ENV NEXT_PUBLIC_API_URL=$APP_URL
-
 RUN npm run build -w frontend
 
 FROM node:20-alpine AS runner
@@ -26,6 +22,8 @@ COPY --from=builder /app/frontend/public ./frontend/public
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+# Internal Docker hostname of the backend, used server-side only by the rewrites proxy
+ENV BACKEND_INTERNAL_URL=http://backend:3001
 
 EXPOSE 3000
 CMD ["node", "frontend/server.js"]

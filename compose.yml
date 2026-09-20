@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - budgetizerr_network
 
   backend:
     build:
@@ -40,6 +42,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - budgetizerr_network
 
   frontend:
     build:
@@ -54,6 +58,11 @@ services:
         condition: service_healthy
     ports:
       - "3012:3000"
+    networks:
+      - budgetizerr_network
 
 volumes:
   postgres_data:
+
+networks:
+  budgetizerr_network:

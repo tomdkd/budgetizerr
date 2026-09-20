@@ -24,5 +24,8 @@ COPY --from=builder /app/frontend/.next/standalone ./
 COPY --from=builder /app/frontend/.next/static ./frontend/.next/static
 COPY --from=builder /app/frontend/public ./frontend/public
 
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
 EXPOSE 3000
 CMD ["node", "frontend/server.js"]

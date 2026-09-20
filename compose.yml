@@ -46,7 +46,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        APP_URL: http://localhost:3001
+        APP_URL: http://backend:3001
     container_name: budgetizerr_frontend
     restart: unless-stopped
     depends_on:

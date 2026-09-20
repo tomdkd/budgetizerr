@@ -85,26 +85,65 @@ jobs:
         run: npm test --if-present
 
   # ==========================================
-  # 4. Docker (Build de validation en PR ou Build & Push sur develop/master)
+  # 4. PR Check : 4 builds en parallèle (AMD64 & ARM64) - AUCUN PUSH
   # ==========================================
-  docker:
-    name: Docker Build & Registry
+  docker-pr-check:
+    name: Check Docker (${{ matrix.app }} - ${{ matrix.arch }})
     needs: test
-    # On n'exécute ce job que si on est en PR, ou en push sur develop / master
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'))
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
+        arch: [amd64, arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up QEMU (pour émuler ARM64)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Login uniquement si on a besoin de push
+      - name: Build Docker image (${{ matrix.app }} / ${{ matrix.arch }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.app }}/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.app }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}-${{ matrix.arch }}
+
+  # ==========================================
+  # 5. Push après merge (develop / master) : Multi-Arch unifié sur GHCR
+  # ==========================================
+  docker-publish:
+    name: Publish ${{ matrix.app }} (Multi-Arch)
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -117,12 +156,11 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      # Configuration des tags pour le Backend
-      - name: Metadata Backend
-        id: meta-backend
+      - name: Extract Docker metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_BACKEND }}
+          images: ${{ matrix.app == 'backend' && env.IMAGE_BACKEND || env.IMAGE_FRONTEND }}
           flavor: |
             latest=false
           tags: |
@@ -132,39 +170,14 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=sha,format=short
 
-      - name: Build and Push Backend
+      - name: Build and Push Multi-Arch Image (amd64 + arm64)
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: backend/Dockerfile
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Configuration des tags pour le Frontend
-      - name: Metadata Frontend
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_FRONTEND }}
-          flavor: |
-            latest=false
-          tags: |
-            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
-            type=raw,value=${{ steps.pkg_version.outputs.VERSION }},enable=${{ github.ref == 'refs/heads/master' }}
-            type=raw,value=v${{ steps.pkg_version.outputs.VERSION }},enable=${{ github.ref == 'refs/heads/master' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            type=sha,format=short
-
-      - name: Build and Push Frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: frontend/Dockerfile
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          file: ${{ matrix.app }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app }}-multiarch
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}-multiarch

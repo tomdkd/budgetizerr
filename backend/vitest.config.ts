@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
@@ -9,5 +9,14 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    coverage: {
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        '**/*.dto.ts',
+        '**/*.module.ts',
+        'src/main.ts',
+        'src/test-utils/**',
+      ],
+    },
   },
 });
